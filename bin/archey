@@ -39,7 +39,7 @@ do
         opt_offline=t
       ;;
     -h|--help)
-      echo "Archey OS X 1.7.0"
+      echo "Archey macOS 1.7.0"
       echo
       echo "Usage: $0 [options]"
       echo
