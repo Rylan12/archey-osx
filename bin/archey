@@ -37,9 +37,6 @@ do
       ;;
     -o|--offline)
         opt_offline=t
-        ;;
-    -l|--localip)
-		opt_localip=t
       ;;
     -h|--help)
       echo "Archey OS X 1.6.1"
@@ -50,8 +47,7 @@ do
       echo "  -m --macports  Force use MacPorts as package system."
       echo "  -b --nocolor   Turn color off."
       echo "  -c --color     Force the color on (overrides --nocolor)."
-      echo "  -o --offline   Disable the IP address check."
-      echo "  -l --localip   Show local IP adddress"
+      echo "  -o --offline   Disable the IP address and location check."
       exit 0
       ;;
     *)
@@ -66,35 +62,33 @@ done
 user=$(whoami)
 hostname=$(hostname | sed 's/.local//g')
 
-# v4 and v6 address detection
+# Detect IP address
 if [[ "${opt_offline}" = f ]]; then
-    ipfile4="${HOME}/.archey-ipv4"
-    ipfile6="${HOME}/.archey-ipv6"
-    if [ -a "$ipfile4" ] && test `find "$ipfile4" -mmin -360`; then
-        while read -r line; do
-            V4="$line"
-        done < "$ipfile4"
+    infofile="${HOME}/.config/archey/info"
+    if [ -a "$infofile" ] && test `find "$infofile" -mmin -360`; then
+      while read -r line1; do
+        read line2
+        read line3
+        ip="$line1"
+        country="$line2"
+        city="$line3"
+      done < "$infofile"
     else
-        if V4=$(curl -sS --max-time 5 https://4.ifcfg.me/ 2>/dev/null); then
-            echo $V4 > "$ipfile4"
-        fi
+      if [ ! -d "$(dirname "$infofile")" ]; then
+        mkdir -p "$(dirname "$infofile")"
+      fi
+      info=$(curl -sS --max-time 5 ifconfig.co/json)
+      ip=$(echo $info | $(which jq) --raw-output '.ip')
+      country=$(echo $info | $(which jq) --raw-output '.country')
+      city=$(echo $info | $(which jq) --raw-output '.city')
+      echo $ip >> "$infofile"
+      echo $country >> "$infofile"
+      echo $city >> "$infofile"
     fi
-    if [ -a "$ipfile6" ] && test `find "$ipfile6" -mmin -360`; then
-        while read -r line; do
-            V6="$line"
-        done < "$ipfile6"
-    else
-        if V6=$(curl -sS --max-time 5 https://6.ifcfg.me/ 2>/dev/null); then
-            echo $V6 > "$ipfile6"
-        fi
-    fi
-fi
-
-if [[ "${opt_localip}" = t ]]; then
-	# Get the interface used for the default route
-	activeadapter=$(route -n get 0.0.0.0 | awk '/interface: / {print $2}')
-	# Now get the IP address assigned to that interface
-	localip=$(ifconfig ${activeadapter} | awk '/inet / {print $2}')
+    # Get the interface used for the default route
+    activeadapter=$(route -n get 0.0.0.0 | awk '/interface: / {print $2}')
+    # Now get the IP address assigned to that interface
+    localip=$(ifconfig ${activeadapter} | awk '/inet / {print $2}')
 fi
 
 distro="macOS $(sw_vers -productVersion)"
@@ -155,19 +149,10 @@ fieldlist[${#fieldlist[@]}]="${textColor}Disk:${normal} ${disk}${normal}"
 if [[ ! -z $battery ]]; then
     fieldlist[${#fieldlist[@]}]="${textColor}Battery:${normal} ${battery}%${normal}"
 fi
-# Texts had to be shortend to fit in 80 window
 if [ "${opt_offline}" = f ]; then
-    if [ ! -z "$V4" ]; then
-      fieldlist[${#fieldlist[@]}]="${textColor}IPv4:${normal} ${V4}${normal}"
-    fi
-    if [ ! -z "$V6" ]; then
-      fieldlist[${#fieldlist[@]}]="${textColor}IPv6:${normal} ${V6}${normal}"
-    fi
+    fieldlist[${#fieldlist[@]}]="${textColor}IP Address:${normal} ${ip}, ${localip}${normal}"
+    fieldlist[${#fieldlist[@]}]="${textColor}Location:${normal} ${country}, ${city}${normal}"
 fi
-if [ "${opt_localip}" = t ]; then
-	fieldlist[${#fieldlist[@]}]="${textColor}Local IP:${normal} ${localip}${normal}"
-fi
-
 logofile=${ARCHEY_LOGO_FILE:-"${HOME}/.config/archey-logo"}
 if [ -a "$logofile" ]
   then
